@@ -21,6 +21,7 @@ interface
       function Filename(var aValue: String): IFileSearch;
       function Files(var aList: IStringList): IFileSearch;
       function Folders(var aList: IStringList): IFileSearch;
+      function FullyQualified: IFileSearch;
     end;
 
 

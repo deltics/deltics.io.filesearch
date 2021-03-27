@@ -9,6 +9,7 @@ interface
   uses
     Deltics.InterfacedObjects,
     Deltics.StringLists,
+    Deltics.StringTypes,
     Deltics.IO.FileSearch.Interfaces;
 
 
@@ -36,10 +37,12 @@ interface
       function YieldFilename(var aValue: String): IFileSearch;
       function Files(var aList: IStringList): IFileSearch;
       function Folders(var aList: IStringList): IFileSearch;
+      function FullyQualified: IFileSearch;
 
     private
       fFilenames: StringArray;
       fFolders: StringArray;
+      fFullyQualified: Boolean;
       fHits: Integer;
       fRecurseChildren: Boolean;
       fRecurseParents: Boolean;
@@ -55,6 +58,8 @@ interface
     end;
 
 
+  procedure SplitMulti(const aString: String; var aValues: StringArray);
+
 
 implementation
 
@@ -63,18 +68,72 @@ implementation
     Deltics.IO.Path;
 
 
+  procedure SplitMulti(const aString: String; var aValues: StringArray);
+  var
+    i: Integer;
+    remaining: String;
+    startPos: Integer;
+    value: String;
+    valueIdx: Integer;
+  begin
+    remaining := Trim(aString);
+
+    if Length(remaining) = 0 then
+    begin
+      SetLength(aValues, 0);
+      EXIT;
+    end;
+
+    if Pos(';', remaining) = 0 then
+    begin
+      SetLength(aValues, 1);
+      aValues[0] := remaining;
+      EXIT;
+    end;
+
+    SetLength(aValues, Length(remaining) div 2);
+
+    startPos  := 1;
+    valueIdx  := 0;
+
+    for i := 1 to Length(remaining) do
+    begin
+      if remaining[i] <> ';' then
+        CONTINUE;
+
+      value     := Trim(Copy(remaining, startPos, i - startPos));
+      startPos  := i + 1;
+
+      if value <> '' then
+      begin
+        aValues[valueIdx] := value;
+        Inc(valueIdx);
+      end;
+    end;
+
+    value := Trim(Copy(remaining, startPos, (Length(remaining) - startPos) + 1));
+    if value <> '' then
+    begin
+      aValues[valueIdx] := value;
+      Inc(valueIdx);
+    end;
+
+    SetLength(aValues, valueIdx);
+  end;
+
+
 
   type
     TFilepathFn = function(const aPath: String; const aFilename: String): String;
 
 
-  function NonRecursiveFilePath(const aPath: String; const aFilename: String): String;
+  function FilenameOnly(const aPath: String; const aFilename: String): String;
   begin
     result := aFilename;
   end;
 
 
-  function RecursiveFilePath(const aPath: String; const aFilename: String): String;
+  function QualifiedFilePath(const aPath: String; const aFilename: String): String;
   begin
     result := Path.Append(aPath, aFilename);
   end;
@@ -123,10 +182,11 @@ implementation
 
           if (fHits = 1) and Assigned(fFilenameDest) then
           begin
-            fFilenameDest^  := Path.Append(aPath, rec.Name);
-            done            := NOT Assigned(fCountDest)
-                           and NOT Assigned(fFilesDest)
-                           and NOT Assigned(fFoldersDest);
+            fFilenameDest^  := FilePath(aPath, rec.Name);
+
+            done  := NOT Assigned(fCountDest)
+                 and NOT Assigned(fFilesDest)
+                 and NOT Assigned(fFoldersDest);
           end;
 
         until done or (FindNext(rec) <> 0);
@@ -180,16 +240,17 @@ implementation
       folders := fFoldersDest^;
     end;
 
-    if fRecursive then
-      FilePath := RecursiveFilePath
+    if fRecursive or fFullyQualified or (Length(fFolders) > 1) then
+      FilePath := QualifiedFilePath
     else
-      FilePath := NonRecursiveFilePath;
+      FilePath := FilenameOnly;
 
     for i := 0 to High(fFolders) do
     begin
       for j := 0 to High(fFilenames) do
       begin
-        Find(fFolders[i], fFilenames[j], fRecurseChildren);
+        dir := Path.Absolute(fFolders[i]);
+        Find(dir, fFilenames[j], fRecurseChildren);
 
         if done then
           BREAK;
@@ -203,7 +264,7 @@ implementation
     begin
       for i := 0 to High(fFolders) do
       begin
-        dir := fFolders[i];
+        dir := Path.Absolute(fFolders[i]);
         while Path.Branch(dir, dir) do;
         begin
           for j := 0 to High(fFilenames) do
@@ -233,15 +294,26 @@ implementation
   function TFileSearch.SearchFilename(const aValue: String): IFileSearch;
   var
     i: Integer;
+    patterns: StringArray;
   begin
+    result := self;
+
+    if Pos(';', aValue) > 0 then
+    begin
+      SplitMulti(aValue, patterns);
+
+      for i := 0 to High(patterns) do
+        SearchFilename(patterns[i]);
+
+      EXIT;
+    end;
+
     for i := 0 to High(fFilenames) do
       if fFilenames[i] = aValue then
         EXIT;
 
     SetLength(fFilenames, Length(fFilenames) + 1);
     fFilenames[High(fFilenames)] := aValue;
-
-    result := self;
   end;
 
 
@@ -250,6 +322,8 @@ implementation
     i: Integer;
     dir: String;
   begin
+    result := self;
+
     if Pos(';', aValue) > 0 then
     begin
       OnPath(aValue);
@@ -266,48 +340,26 @@ implementation
 
     SetLength(fFolders, Length(fFolders) + 1);
     fFolders[High(fFolders)] := dir;
-
-    result := self;
   end;
 
 
   function TFileSearch.OnPath(const aValue: String): IFileSearch;
   var
     i: Integer;
-    path: String;
-    dir: String;
-    split: Boolean;
+    folders: StringArray;
   begin
+    result := self;
+
     if Pos(';', aValue) <= 0 then
     begin
       InFolder(aValue);
       EXIT;
     end;
 
-    path := Trim(aValue);
-    while TRUE do
-    begin
-      split := FALSE;
+    SplitMulti(aValue, folders);
 
-      for i := 1 to Length(path) do
-      begin
-        split := path[i] = ';';
-        if split then
-          BREAK;
-      end;
-
-      if split then
-      begin
-        dir := Copy(path, 1, i - 1);
-        Delete(path, 1, i);
-        InFolder(dir);
-      end
-      else
-      begin
-        InFolder(path);
-        BREAK;
-      end;
-    end;
+    for i := 0 to High(folders) do
+      InFolder(folders[i]);
   end;
 
 
@@ -367,6 +419,13 @@ implementation
   function TFileSearch.Folders(var aList: IStringList): IFileSearch;
   begin
     fFoldersDest := @aList;
+    result := self;
+  end;
+
+
+  function TFileSearch.FullyQualified: IFileSearch;
+  begin
+    fFullyQualified := TRUE;
     result := self;
   end;
 

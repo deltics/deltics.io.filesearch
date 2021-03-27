@@ -14,7 +14,8 @@
     "deltics.inc:1.3.0",
     "deltics.interfacedobjects:1.2.0",
     "deltics.io.path:1.0.0",
-    "deltics.stringlists:2.0.0"
+    "deltics.stringlists:2.0.0",
+    "deltics.stringtypes:1.1.1"
   ],
   "source":{
       "files":[
