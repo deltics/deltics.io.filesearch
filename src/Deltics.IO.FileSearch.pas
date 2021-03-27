@@ -10,6 +10,10 @@ interface
     Deltics.IO.FileSearch.Interfaces;
 
 
+  type
+    IFileSearch = Deltics.IO.FileSearch.Interfaces.IFileSearch;
+
+
   function FileSearch: IFileSearch;
 
 
