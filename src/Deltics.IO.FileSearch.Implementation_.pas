@@ -108,7 +108,7 @@ implementation
       if FindFirst(Path.Append(aPath, aPattern), faAnyFile, rec) = 0 then
       try
         repeat
-          if (rec.Name = '.') or (rec.Name = '..') then
+          if Path.IsNavigation(rec.Name) then
             CONTINUE;
 
           if ((rec.Attr and faDirectory) <> 0) then
@@ -141,7 +141,7 @@ implementation
       if (FindFirst(Path.Append(aPath, '*.*'), faDirectory, rec) = 0) then
       try
         repeat
-          if (rec.Name = '.') or (rec.Name = '..') then
+          if Path.IsNavigation(rec.Name) then
             CONTINUE;
 
           if (rec.Attr and faDirectory) <> 0 then
