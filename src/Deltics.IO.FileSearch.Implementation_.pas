@@ -22,9 +22,11 @@ interface
       function IFileSearch.Filename = SearchFilename;
       function IFileSearchYields.Filename = YieldFilename;
     public // IFileSearch
-      function SearchFilename(const aValue: String): IFileSearch;
-      function InFolder(const aValue: String): IFileSearch;
-      function OnPath(const aValue: String): IFileSearch;
+      function AllFiles: IFileSearch;
+      function CurrentDir(const aReplaceExisting: Boolean = FALSE): IFileSearch;
+      function SearchFilename(const aValue: String; const aReplaceExisting: Boolean = FALSE): IFileSearch;
+      function Folder(const aValue: String; const aReplaceExisting: Boolean = FALSE): IFileSearch;
+      function OnPATH(const aReplaceExisting: Boolean = FALSE): IFileSearch;
       function ParentFolders: IFileSearch; overload;
       function ParentFolders(const aValue: Boolean): IFileSearch; overload;
       function Subfolders: IFileSearch; overload;
@@ -34,9 +36,9 @@ interface
 
     public // IFileSearchYields
       function Count(var aValue: Integer): IFileSearch;
-      function YieldFilename(var aValue: String): IFileSearch;
-      function Files(var aList: IStringList): IFileSearch;
-      function Folders(var aList: IStringList): IFileSearch;
+      function YieldFilename(var aValue: String): IFileSearch; overload;
+      function Files(var aList: IStringList; const aReplacingContents: Boolean = FALSE): IFileSearch;
+      function Folders(var aList: IStringList; const aReplacingContents: Boolean = FALSE): IFileSearch;
       function FullyQualified: IFileSearch;
 
     private
@@ -52,8 +54,9 @@ interface
       fFilenameDest: PString;
       fFilesDest: PStringList;
       fFoldersDest: PStringList;
+      fReplaceFiles: Boolean;
+      fReplaceFolders: Boolean;
     public
-      constructor Create(const aPath: String);
       property Hits: Integer read fHits;
     end;
 
@@ -65,6 +68,7 @@ implementation
 
   uses
     SysUtils,
+//    Windows,
     Deltics.IO.Path;
 
 
@@ -140,14 +144,6 @@ implementation
 
 
 
-
-
-  constructor TFileSearch.Create(const aPath: String);
-  begin
-    inherited Create;
-
-    OnPath(aPath)
-  end;
 
 
   function TFileSearch.Execute: Boolean;
@@ -227,7 +223,9 @@ implementation
     if fFilesDest <> NIL then
     begin
       if fFilesDest^ = NIL then
-        fFilesDest^ := TStringList.CreateManaged;
+        fFilesDest^ := TStringList.CreateManaged
+      else if fReplaceFiles then
+        (fFilesDest^).Clear;
 
       files := fFilesDest^;
     end;
@@ -235,7 +233,9 @@ implementation
     if fFoldersDest <> NIL then
     begin
       if fFoldersDest^ = NIL then
-        fFoldersDest^ := TStringList.CreateManaged;
+        fFoldersDest^ := TStringList.CreateManaged
+      else if fReplaceFolders then
+        (fFoldersDest^).Clear;
 
       folders := fFoldersDest^;
     end;
@@ -247,14 +247,20 @@ implementation
 
     for i := 0 to High(fFolders) do
     begin
-      for j := 0 to High(fFilenames) do
-      begin
-        dir := Path.Absolute(fFolders[i]);
-        Find(dir, fFilenames[j], fRecurseChildren);
+      dir := Path.Absolute(fFolders[i]);
 
-        if done then
-          BREAK;
-      end;
+      if Length(fFilenames) > 0 then
+      begin
+        for j := 0 to High(fFilenames) do
+        begin
+          Find(dir, fFilenames[j], fRecurseChildren);
+
+          if done then
+            BREAK;
+        end;
+      end
+      else
+        Find(dir, '*.*', fRecurseChildren);
 
       if done then
         BREAK;
@@ -265,15 +271,21 @@ implementation
       for i := 0 to High(fFolders) do
       begin
         dir := Path.Absolute(fFolders[i]);
+
         while Path.Branch(dir, dir) do;
         begin
-          for j := 0 to High(fFilenames) do
+          if Length(fFilenames) > 0 then
           begin
-            Find(dir, fFilenames[j], FALSE);
+            for j := 0 to High(fFilenames) do
+            begin
+              Find(dir, fFilenames[j], FALSE);
 
-            if done then
-              BREAK;
-          end;
+              if done then
+                BREAK;
+            end;
+          end
+          else
+            Find(dir, '*.*', FALSE);
 
           if done then
             BREAK;
@@ -291,12 +303,16 @@ implementation
   end;
 
 
-  function TFileSearch.SearchFilename(const aValue: String): IFileSearch;
+  function TFileSearch.SearchFilename(const aValue: String;
+                                      const aReplaceExisting: Boolean): IFileSearch;
   var
     i: Integer;
     patterns: StringArray;
   begin
     result := self;
+
+    if aReplaceExisting then
+      SetLength(fFilenames, 0);
 
     if Pos(';', aValue) > 0 then
     begin
@@ -317,16 +333,25 @@ implementation
   end;
 
 
-  function TFileSearch.InFolder(const aValue: String): IFileSearch;
+  function TFileSearch.Folder(const aValue: String;
+                              const aReplaceExisting: Boolean): IFileSearch;
   var
     i: Integer;
     dir: String;
+    dirs: StringArray;
   begin
     result := self;
 
+    if aReplaceExisting then
+      SetLength(fFolders, 0);
+
     if Pos(';', aValue) > 0 then
     begin
-      OnPath(aValue);
+      SplitMulti(aValue, dirs);
+
+      for i := 0 to High(dirs) do
+        Folder(dirs[i]);
+
       EXIT;
     end;
 
@@ -343,23 +368,11 @@ implementation
   end;
 
 
-  function TFileSearch.OnPath(const aValue: String): IFileSearch;
-  var
-    i: Integer;
-    folders: StringArray;
+  function TFileSearch.OnPATH(const aReplaceExisting: Boolean): IFileSearch;
   begin
     result := self;
 
-    if Pos(';', aValue) <= 0 then
-    begin
-      InFolder(aValue);
-      EXIT;
-    end;
-
-    SplitMulti(aValue, folders);
-
-    for i := 0 to High(folders) do
-      InFolder(folders[i]);
+    Folder(GetEnvironmentVariable('PATH'), aReplaceExisting);
   end;
 
 
@@ -402,6 +415,13 @@ implementation
   end;
 
 
+  function TFileSearch.AllFiles: IFileSearch;
+  begin
+    SearchFilename('*.*', TRUE);
+    result := self;
+  end;
+
+
   function TFileSearch.Count(var aValue: Integer): IFileSearch;
   begin
     fCountDest := @aValue;
@@ -409,16 +429,29 @@ implementation
   end;
 
 
-  function TFileSearch.Files(var aList: IStringList): IFileSearch;
+  function TFileSearch.CurrentDir(const aReplaceExisting: Boolean): IFileSearch;
   begin
-    fFilesDest := @aList;
+    Folder(GetCurrentDir, aReplaceExisting);
     result := self;
   end;
 
 
-  function TFileSearch.Folders(var aList: IStringList): IFileSearch;
+  function TFileSearch.Files(var   aList: IStringList;
+                             const aReplacingContents: Boolean): IFileSearch;
   begin
-    fFoldersDest := @aList;
+    fFilesDest    := @aList;
+    fReplaceFiles := aReplacingContents;
+
+    result := self;
+  end;
+
+
+  function TFileSearch.Folders(var   aList: IStringList;
+                               const aReplacingContents: Boolean): IFileSearch;
+  begin
+    fFoldersDest    := @aList;
+    fReplaceFolders := aReplacingContents;
+
     result := self;
   end;
 
