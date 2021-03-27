@@ -13,12 +13,17 @@ interface
     FileSearchTests = class(TTest)
       procedure FullyQualifiedResults;
       procedure MultiPatternFilename;
+      procedure ReuseSearchAddingFilesContentInYield;
+      procedure ReuseSearchAddingFoldersContentInYield;
+      procedure ReuseSearchReplacingFilesContentInYield;
+      procedure ReuseSearchReplacingFoldersContentInYield;
+      procedure ReuseSearchReplacingSearchFilename;
+      procedure ReuseSearchReplacingSearchFolder;
       procedure SearchingPATH;
     {$ifNdef _CICD}
       procedure SearchingPATHLookingForFirstResult;
     {$endif}
       procedure SplitMultiResults;
-      procedure WorksAsExpected;
     end;
 
 
@@ -39,15 +44,13 @@ implementation
   var
     filename: String;
   begin
-    FileSearch.InCurrentDir
-      .Filename('*.*')
+    FileSearch.CurrentDir.AllFiles
       .Yielding.Filename(filename)
       .Execute;
 
     Test('filename').Assert(filename).DoesNotContain('\');
 
-    FileSearch.InCurrentDir
-      .Filename('*.*')
+    FileSearch.CurrentDir.AllFiles
       .Yielding.Filename(filename)
       .Yielding.FullyQualified
       .Execute;
@@ -63,7 +66,7 @@ implementation
     foundDll: Boolean;
     foundExe: Boolean;
   begin
-    FileSearch.InFolder('c:\windows')
+    FileSearch.Folder('c:\windows')
       .Filename('*.dll;*.exe')
       .Yielding.Files(files)
       .Execute;
@@ -83,6 +86,137 @@ implementation
     end;
 
     Test('dll+exe').Assert(foundDll and foundExe).IsTrue;
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchAddingFilesContentInYield;
+  var
+    search: IFileSearch;
+    files: IStringList;
+    count: Integer;
+  begin
+    files := TStringList.CreateManaged;
+
+    search := FileSearch.Yielding.Files(files);
+
+    search.Folder('c:\windows').Execute;
+    count := files.Count;
+
+    Test('files.Count').Assert(count).GreaterThan(0);
+
+    search.Execute;
+
+    Test('files.Count = 2x count').Assert(files.Count).Equals(2 * count);
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchAddingFoldersContentInYield;
+  var
+    search: IFileSearch;
+    folders: IStringList;
+    count: Integer;
+  begin
+    folders := TStringList.CreateManaged;
+
+    search := FileSearch.Yielding.Folders(folders);
+
+    search.Folder('c:\windows').Execute;
+    count := folders.Count;
+
+    Test('folders.Count').Assert(count).GreaterThan(0);
+
+    search.Execute;
+
+    Test('folders.Count = 2x count').Assert(folders.Count).Equals(2 * count);
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchReplacingFilesContentInYield;
+  var
+    search: IFileSearch;
+    files: IStringList;
+    count: Integer;
+  begin
+    files := TStringList.CreateManaged;
+
+    search := FileSearch.Yielding.Files(files, TRUE);
+
+    search.Folder('c:\windows').Execute;
+    count := files.Count;
+
+    Test('files.Count').Assert(count).GreaterThan(0);
+
+    search.Execute;
+
+    Test('files.Count = count').Assert(files.Count).Equals(count);
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchReplacingFoldersContentInYield;
+  var
+    search: IFileSearch;
+    folders: IStringList;
+    count: Integer;
+  begin
+    folders := TStringList.CreateManaged;
+
+    search := FileSearch.Yielding.Folders(folders, TRUE);
+
+    search.Folder('c:\windows').Execute;
+    count := folders.Count;
+
+    Test('folders.Count').Assert(count).GreaterThan(0);
+
+    search.Execute;
+
+    Test('folders.Count = count').Assert(folders.Count).Equals(count);
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchReplacingSearchFilename;
+  var
+    search: IFileSearch;
+    count: Integer;
+    dllCount: Integer;
+    exeCount: Integer;
+  begin
+    search := FileSearch.Folder('c:\windows');
+
+    search.Filename('*.dll;*.exe').Yielding.Count(count).Execute;
+
+    Test('count').Assert(count).GreaterThan(0);
+
+    search.Filename('*.exe', TRUE).Yielding.Count(exeCount).Execute;
+
+    Test('exeCount').Assert(exeCount).GreaterThan(0);
+
+    search.Filename('*.dll', TRUE).Yielding.Count(dllCount).Execute;
+
+    Test('dllCount').Assert(dllCount).GreaterThan(0);
+
+    Test('dllCount + exeCount').Assert(dllCount + exeCount).Equals(count);
+  end;
+
+
+  procedure FileSearchTests.ReuseSearchReplacingSearchFolder;
+  var
+    search: IFileSearch;
+    count: Integer;
+    windowsCount: Integer;
+    rootCount: Integer;
+  begin
+    search := FileSearch.Folder('c:\windows;c:\').AllFiles;
+
+    search.Yielding.Count(count).Execute;
+    Test('count').Assert(count).GreaterThan(0);
+
+    search.Folder('c:\windows', TRUE).Yielding.Count(windowsCount).Execute;
+    Test('windowsCount').Assert(windowsCount).GreaterThan(0);
+
+    search.Folder('c:\', TRUE).Yielding.Count(rootCount).Execute;
+    Test('rootCount').Assert(rootCount).GreaterThan(0);
+
+    Test('windowsCount + rootCount').Assert(windowsCount + rootCount).Equals(count);
   end;
 
 
@@ -154,31 +288,6 @@ implementation
     Test('SplitMulti( abc ; 123 ; def )[2]').Assert(result[2]).Equals('def');
   end;
 
-
-  procedure FileSearchTests.WorksAsExpected;
-  var
-    count: Integer;
-    files, ogFiles: IStringList;
-    folders: IStringList;
-  begin
-    count   := -1;
-    ogFiles := TStringList.CreateManaged;
-    files   := ogFiles;
-
-    FileSearch.InCurrentDir
-      .Subfolders
-      .ParentFolders
-      .Filename('*.exe')
-      .Yielding.Count(count)
-      .Yielding.Files(files)
-      .Yielding.Folders(folders)
-      .Execute;
-
-    Test('count').Assert(count).GreaterThanOrEquals(0);
-    Test('files').Assert(files).IsAssigned;
-    Test('files = ogFiles').Assert(files).Equals(ogFiles);
-    Test('folders').Assert(folders).IsAssigned;
-  end;
 
 
 
