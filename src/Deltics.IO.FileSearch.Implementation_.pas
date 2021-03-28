@@ -145,7 +145,9 @@ implementation
 
 
 
+{ TFileSearch ------------------------------------------------------------------------------------ }
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Execute: Boolean;
   var
     done: Boolean;
@@ -272,7 +274,7 @@ implementation
       begin
         dir := Path.Absolute(fFolders[i]);
 
-        while Path.Branch(dir, dir) do;
+        while Path.Branch(dir, dir) do
         begin
           if Length(fFilenames) > 0 then
           begin
@@ -302,7 +304,21 @@ implementation
     result := fHits > 0;
   end;
 
+{--------------------------------------------------------------------------------------------------}
+// NOTE:  Debugging is disabled for all methods following this point.  These methods are for
+//         configuring the search  and are unlikley to be of interest.  If they are suspected
+//         of some fault and require debugging, simply add the required additional $DEFINE to
+//         your project settings.
+{--------------------------------------------------------------------------------------------------}
 
+{$debuginfo OFF}
+{$ifdef debug_DelticsIOFileSearchConfiguration}
+  {$debuginfo ON}
+{$endif}
+
+{--------------------------------------------------------------------------------------------------}
+
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.SearchFilename(const aValue: String;
                                       const aReplaceExisting: Boolean): IFileSearch;
   var
@@ -333,6 +349,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Folder(const aValue: String;
                               const aReplaceExisting: Boolean): IFileSearch;
   var
@@ -368,6 +385,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.OnPATH(const aReplaceExisting: Boolean): IFileSearch;
   begin
     result := self;
@@ -376,6 +394,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.ParentFolders: IFileSearch;
   begin
     fRecurseParents := TRUE;
@@ -384,6 +403,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.ParentFolders(const aValue: Boolean): IFileSearch;
   begin
     fRecurseParents := aValue;
@@ -392,6 +412,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Subfolders: IFileSearch;
   begin
     fRecurseChildren  := TRUE;
@@ -400,6 +421,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Subfolders(const aValue: Boolean): IFileSearch;
   begin
     fRecurseChildren  := aValue;
@@ -409,12 +431,14 @@ implementation
 
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Yielding: IFileSearchYields;
   begin
     result := self;
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.AllFiles: IFileSearch;
   begin
     SearchFilename('*.*', TRUE);
@@ -422,6 +446,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Count(var aValue: Integer): IFileSearch;
   begin
     fCountDest := @aValue;
@@ -429,6 +454,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.CurrentDir(const aReplaceExisting: Boolean): IFileSearch;
   begin
     Folder(GetCurrentDir, aReplaceExisting);
@@ -436,6 +462,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Files(var   aList: IStringList;
                              const aReplacingContents: Boolean): IFileSearch;
   begin
@@ -446,6 +473,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.Folders(var   aList: IStringList;
                                const aReplacingContents: Boolean): IFileSearch;
   begin
@@ -456,6 +484,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.FullyQualified: IFileSearch;
   begin
     fFullyQualified := TRUE;
@@ -463,6 +492,7 @@ implementation
   end;
 
 
+  { - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - }
   function TFileSearch.YieldFilename(var aValue: String): IFileSearch;
   begin
     fFilenameDest := @aValue;
